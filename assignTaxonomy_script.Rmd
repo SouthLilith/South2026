@@ -7,7 +7,7 @@ output: html_document
   
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/2026')
+knitr::opts_knit$set(root.dir = 'root_directory')
 ```
 
 ## Setup:
@@ -64,7 +64,7 @@ write.fasta(pr2_V1V3_unaligned, names = names(sequences), file.out = "refV1V3_un
 
 # I need to generate a table that has the pr2 accession numbers as one column and the taxonomic information in another separated by ";" using the propagated_taxonomy.xlsx file
 # Read and save taxonomy file where I copied and pasted the accession number column and the taxonomy columns 
-tax <- read.table(file = "C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/microsporidia/additional_taxa/2026/annotation2026June02.txt", 
+tax <- read.table(file = "annotation_file.txt", 
                   sep = "\t",
                   header = TRUE)
 
@@ -86,7 +86,7 @@ renamed <- rename.fasta(infile = "refV1V3_unaligned.fasta",
 # Dada2 
 tutorial https://benjjneb.github.io/dada2/tutorial.html
 ```{r}
-path <- "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/enironmental_sequences/chauvet2023_sequences/mic_primers_used" #path is directory to environmental sequences
+path <- "path" #path is directory to environmental sequences
 
 list.files(path)
 ```
@@ -252,12 +252,12 @@ rownames(track) <- sample.names
 head(track) # the merged sequences do not decrease too much
 
 View(seqtab.nochim)
-saveRDS(seqtab.nochim, "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/seqtab_nochim.rds")
+saveRDS(seqtab.nochim, "seqtab_nochim.rds")
 ```
 
 Time to assign taxonomy!
 ```{r}
-seqs <- readRDS("C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/seqtab_nochim.rds")
+seqs <- readRDS("seqtab_nochim.rds")
 
 taxa_assigned_pr2 <- assignTaxonomy(seqs, "pr2_train_v1v3_renamed.fasta",
                        minBoot = 80,
@@ -280,10 +280,10 @@ Time to make figures- relative abundances
 ```{r}
 #I have issues with seqtab_nochim saving improperly and it is causing my assigned taxa to be wrong, so I'll load this object back into R since I saved it 
 
-seqs <- readRDS("C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/seqtab_nochim.rds")
+seqs <- readRDS("seqtab_nochim.rds")
 ## I tried reading this csv in, but had issues when making the phyloseq object 
 
-sample_info <- read.table("C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/enironmental_sequences/chauvet2023_sequences/sample_info.csv",
+sample_info <- read.table("sample_info.csv",
                           header = TRUE,
                           sep = ",")
 
@@ -542,7 +542,7 @@ ggsave("rel_abun_genus_env_currated_pr2_sorted.svg",
 
 Run classification again, but with the old pr2 database
 ```{r}
-setwd(dir='C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/environmental_search')
+setwd(dir='directory')
 
 # Generate the taxonomy file for the previous rendition of the pr2 database
 old_pr2_tax <- read.csv(file = "old_pr2_tax.csv", 
@@ -560,7 +560,7 @@ write.table(x=accession_old_pr2_tax,
 # Rename headers of FASTA file
 ## this FASTA file should only contain the sequences from pr2_microsporidai_first.fa (excluding outgroups)
 ## Run this alignment and trim using Geneious
-rename.fasta(infile = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/previous pr2/microsporidia_v1v3.fasta", 
+rename.fasta(infile = "microsporidia_v1v3.fasta", 
              ref_table = accession_old_pr2_tax, 
              outfile = "old_pr2_train_set_mic_v1v3_renamed.fasta") 
 
@@ -578,7 +578,7 @@ View(filtered_old_pr2_ref_fasta)
 
 Time to assign taxonomy with the old pr2 database
 ```{r}
-setwd(dir='C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/environmental_search')
+setwd(dir='directory')
 
 seqs <- readRDS("seqtab_nochim.rds")
 
@@ -595,7 +595,7 @@ write.csv(taxa_assigned_old_pr2, file = "taxa_old_pr2.csv", row.names = TRUE, co
 ```
 
 ```{r}
-setwd(dir='C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/environmental_search')
+setwd(dir='directory')
 taxa_assigned_old_pr2 <- read.csv("taxa_old_pr2.csv", row.names = 1)
 
 tax_old_pr2_matrix <- as.matrix(taxa_assigned_old_pr2)
@@ -802,10 +802,10 @@ p1_old
 ```{r}
 ggsave("rel_abun_genus_env_old_pr2_sorted.png", 
        plot = rel_abun_by_genus_and_env_old,
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/plots")
+       path = "plots")
 ggsave("rel_abun_genus_env_old_pr2_sorted.svg", 
        plot = rel_abun_by_genus_and_env_old,
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/plots")
+       path = "plots")
 
 ```
 
@@ -818,7 +818,7 @@ refseq()      DNAStringSet:      [ 16 reference sequences ]
 Time to test the Dubuffet database
   I have separate a fasta file alignment and a list of accession numbers with taxonomic information   I need to set the alignment up like I did with my alignment 
 ```{r}
-setwd(dir="C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/Chauvet_database")
+setwd(dir="directory")
 
 # Read and save taxonomy file
 ch_tax <- read.table(file = "Taxonomy.txt", 
@@ -829,20 +829,20 @@ View(ch_tax)
 ```
 
 ```{r}
-setwd(dir="C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/Chauvet_database")
+setwd(dir="directory")
 #read and save fasta file with trimmed reference sequences as done with pr2 reference sequences
 
 # Rename headers of FASTA file
-ch_renamed <- rename.fasta(infile = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/Chauvet_database/microsporidia_eukaryota_v1v3Unpaired.fasta", 
+ch_renamed <- rename.fasta(infile = "microsporidia_eukaryota_v1v3Unpaired.fasta", 
              ref_table = ch_tax, 
              outfile = "chauvet_ref_seqs_v1v3_renamed.fasta") 
 ```
 
 Time to assign taxonomy according to the Dubuffet database
 ```{r}
-seqs <- readRDS("C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/seqtab_nochim.rds")
+seqs <- readRDS("seqtab_nochim.rds")
 
-taxa_assigned_ch <- assignTaxonomy(seqs, "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/Chauvet_database/chauvet_ref_seqs_v1v3_renamed.fasta",
+taxa_assigned_ch <- assignTaxonomy(seqs, "chauvet_ref_seqs_v1v3_renamed.fasta",
                        minBoot = 80,
                        multithread = FALSE)
 
@@ -857,7 +857,7 @@ write.csv(taxa_assigned_ch, file = "taxa_ch.csv", row.names = TRUE, col.names = 
 
 ```{r}
 ## If there are issues loading taxa_assigned, use the path below
-# taxa_assigned_ch <- read.csv("C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/taxa_ch.csv", row.names = 1)
+# taxa_assigned_ch <- read.csv("taxa_ch.csv", row.names = 1)
 
 tax_ch_matrix <- as.matrix(taxa_assigned_ch)
 tax_table_ch_obj <- tax_table(tax_ch_matrix)
@@ -1039,10 +1039,10 @@ p3_ch
 ```{r}
 ggsave("rel_abun_genus_env_currated_ch_sorted.png", 
        plot = rel_abun_by_genus_and_env_ch,
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/plots")
+       path = "plots")
 ggsave("rel_abun_genus_env_currated_ch_sorted.svg", 
        plot = rel_abun_by_genus_and_env_ch,
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/plots")
+       path = "plots")
 ```
 
 There are some differences between the pr2 database and the chauvet database, especially with some taxa showing that they are uncharacterized using the pr2 database. I want to see if this is a short coming of my database or the chauvet database. So, I will see what similar reference sequences there are and compare their taxonomic annotations between the two 
@@ -1053,9 +1053,9 @@ Now I need to look at what sequences are in Chauvet, but not in pr2...
 
 Read in the taxonomy files and see what taxa aren't included in the pr2
 ```{r}
-ch_mic <- read.table("C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/Chauvet_database/microsporidia_taxonomy.txt", sep = "\t", header = FALSE)
+ch_mic <- read.table("microsporidia_taxonomy.txt", sep = "\t", header = FALSE)
 
-pr2_mic <- read.table("C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/accession_tax.txt", header = TRUE, stringsAsFactors = FALSE)
+pr2_mic <- read.table("accession_tax.txt", header = TRUE, stringsAsFactors = FALSE)
 
 # Extract prefixes from pr2_mic
 pr2_mic_acc <- pr2_mic %>%
@@ -1073,7 +1073,7 @@ View(ch_unique)
 ```{r}
 ch_unique_acc <- ch_unique[, 1]
 
-write.table(ch_unique_acc, "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/Chauvet_database/unique_taxa.txt", row.names = FALSE, col.names = FALSE, quote = FALSE)
+write.table(ch_unique_acc, "unique_taxa.txt", row.names = FALSE, col.names = FALSE, quote = FALSE)
 ```
 
 Or I could use this list to pull out the sequences from the .fasta file from chauvet and then add those already trimmed sequences to my alignment 
@@ -1107,6 +1107,6 @@ classify.fig.patch
 ggsave("classified_all_datasets.svg", 
        plot = classify.fig.patch,
        width = 7, 
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/environmental_search/plots")
+       path = "plots")
 ```
 Save, but continue to edit the .svg file
