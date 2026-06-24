@@ -1,0 +1,548 @@
+---
+title: "PR2 Tree"
+author: "Lilith South"
+date: "2024-10-09"
+output: html_document
+---
+
+# This R Markdown includes code chunks for visualizing Microsporidia PR2 trees
+From Corey Holt https://github.com/coreyholt/ggbeginners/blob/main/ggbeginners_phylogeneticTrees.R
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/microsporidia/additional_taxa/2026') 
+```
+
+1. load required libraries     
+```{r}
+library(tidyverse)
+library(ape) # for tree manipulation
+library(dplyr) # for data manipulation
+library(ggtree)
+library(tidytree)
+library(ggnewscale) # allow for multiple scale_fills
+library(gginnards) # to move layers
+library(treeio)
+library(writexl)
+library(readr)
+library(ggplot2)
+library(svglite) # used with ggsave for better exporting of svg files
+library(ggrepel) # prevents overlapping of text
+library(rainbow)
+library(phyloseq)
+library(phylotools)
+library(stringr)
+library(ggtext) 
+library(wacolors) # colorblind friendly pallet 
+library(readxl) # for importing excel files
+```
+
+2. Read in tree file
+```{r}
+#rooted tree
+raxml <- read.raxml("RAxML_bipartitionsBranchLabels.tre")
+
+raxml
+```
+3. vizualize raxml with ggtree
+```{r}
+tree1 <- ggtree(raxml) 
+
+ tree1
+```
+
+4. Rename tips with taxonomic information 
+```{r}
+# First I need to extract the accession numbers that are actually in the tree from the table of all pr2 accession numbers (and outgroups)
+
+og_lb <- get.tree(raxml)$tip.label
+
+all_pr2_labels <- read.table("annotation 2026June02.txt", header = TRUE, sep = "\t")
+
+og_lb_with_tax <- subset(all_pr2_labels, og_tip_lab %in% og_lb)
+
+View(og_lb_with_tax)
+```
+
+# Provide descriptive labels for when taxa do not have species names
+I already ran and edited this in the file listed below, so I will open and provide new annotations where needed and re-save in the working directory 
+```{r}
+# I will place the original gb_definition in another column, and change the new label to the definition for taxa that end in "sp.". I'll then need to curate the names
+
+og_lb_with_tax <- og_lb_with_tax %>%
+  rename(pr2_accession = og_tip_lab)
+
+ogMetaTable <- read_excel("C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/finished_propagated_taxonomy_metadata_unchanged.xlsx")
+
+merged_lb <- merge(og_lb_with_tax, ogMetaTable[, c("pr2_accession", "gb_definition")], 
+                   by = "pr2_accession", 
+                   all.x = TRUE)
+
+write.csv(merged_lb, "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/microsporidia/additional_taxa/1000bp_tree/plus_ch_taxa/plus corsaro sb/merged_lb.csv", row.names = FALSE)
+
+```
+
+# New labels
+Be sure to change the file name before uploading back, or you could accidentally rewrite!
+```{r}
+edit_lb <- read.csv("edited_merged_lb.csv")
+```
+
+Determine node positions for taxonomic annotation
+```{r}
+# Add taxonomic names and identify nodes
+
+## Family
+fam_lb_tree <- tree1 %<+% og_lb_with_tax +
+  geom_tiplab(linewidth = .5, aes(label = family)) +
+  geom_text(size = .5, aes(label=node), color = "forestgreen")+
+  geom_tree(size = .25)
+
+## Order
+ord_lb_tree <- tree1 %<+% og_lb_with_tax +
+  geom_tiplab(linewidth = .5, aes(label = order)) +
+  geom_text(size = .5, aes(label=node), color = "forestgreen")+
+  geom_tree(size = .25)
+
+ggsave(
+  file = "fam_lbl_tree.svg",
+  plot = fam_lb_tree)
+
+ggsave(
+  file = "order_lbl_tree.svg",
+  plot = ord_lb_tree)
+```
+## Taxonomic Annotation
+# Order
+"Enterocytozoonida" 750
+"Nosema" 852 #To be edited
+"Glugeida" 619
+"Amblyosporida" 548
+"Neopereziida" 919
+"Caudosporida" 914
+"Ovavisculida" 958
+"Metchnikovellida" 541
+"Nucleophagales" 982
+"Paramicrosporidiales" 1035?
+"Morellosporales" 963?
+Astathelohaniida 907 # to be edited
+
+Include orders Astathelohaniida (Frizzera et al., 2026), Nosematida, and Areosporida in tree manually and be sure to include in annotations
+
+# Family
+"Mrazekiidae" 796
+"Enterocytozoonidae" 769
+"Encephalitozoonidae" 835
+"Nosematidae" 852
+"Glugeidae" 641
+"Spragueidae" 680
+"Unikaryonidae" 702
+"Astathelohaniidae" 907
+"Neoperezidae" 931
+"Tubulinosematidae" 951
+"Caudosporidae" 914
+"Amblyosporidae" 574
+"Gurleyidae" 557
+"Amphiacanthidae" 543
+"Metchnikovellidae" 541
+"outgroup" 1049
+"Tuzetidae" 660
+"Paramicrosporidiaceae" 1041
+"nucleophagaceae" 982
+Morellosporaceae 970
+Pleistophoridae 3 672
+Pleistophoridae 2 661
+Pleistophoridae 1 632
+Perezidae 621
+
+
+# Circular tree layout without tip labels 
+```{r}
+# some accessible pallets 
+wacolors$rainier
+```
+See this link for color-blind friendly colors https://cran.r-project.org/web/packages/khroma/vignettes/tol.html 
+```{r}
+
+#order nodes from nexus tree
+order <- data.frame(
+  node = c(750, 852, 619, 548, 919, 914, 958, 541, 982, 1035, 963, 907),
+  fill = c("#44AA99", "#CC6677", "#228833", "#1170AA", "#EE8866", "#88CCEE", "#EF67EB", "#00BD5C", "#882255", "#DDDDDD", "#DDCC77", "#999933"),
+  type = c("Enterocytozoonida", "Nosema", "Glugeida", "Amblyosporida", "Neopereziida", "Caudosporida", "Ovavisculida", "Metchnikovellida", "Nucleophagales", "Paramicrosporidiales", "Morellosporales", "Astathelohaniida")
+) # edit nosema in .svg file to include encephalitozoonidae
+
+order$type <- factor(order$type, levels = order$type)
+
+order_colors <- setNames(order$fill, order$type)
+```
+
+tree with all tip labels
+```{r}
+full.mic.tree <- tree1 %<+% edit_lb +
+  geom_tiplab(size = 2, aes(label = new_lb)) +
+  geom_tree(size = .25) +
+  geom_treescale() +
+  geom_hilight(data = order, 
+               mapping = aes(node = node, fill = type),  # Map fill to type
+               show.legend = FALSE,
+               extendto = 3) +
+  scale_fill_manual(values = c("#44AA99", "#CC6677", "#228833", "#1170AA", "#EE8866", "#88CCEE", "#EF67EB", "#00BD5C", "#882255", "#DDDDDD", "#DDCC77", "#999933")) +
+  geom_cladelab(data = data.frame( # family
+    node = c(796, 769, 835, 852, 641, 632, 661, 672, 680, 702, 621, 907, 931, 951, 914, 574, 557, 543, 541, 1049),
+    name = c("Mrazekiidae", "Enterocytozoonidae", "Encephalitozoonidae", "Nosematidae", "Glugeidae", "Pleistophoridae 1", "Pleistophoridae 2", "Pleistophoridae 3", "Spragueidae", "Unikaryonidae", "Perezidae", "Astathelohaniidae", "Neoperezidae", "Tubulinosematidae", "Caudosporidae", "Amblyosporidae", "Gurleyidae", "Amphiacanthidae", "Metchnikovellidae", "outgroup")),
+    mapping = aes(node = node,
+                  label = name),
+    align = TRUE,
+    offset = .5,
+    barsize = .2,
+    fontsize = 2,
+    horizontal = TRUE) + 
+  new_scale_fill() +
+  geom_point2(aes(subset = !isTip & bootstrap == 100),
+              shape = 21,
+              fill = "black",
+              size = 1.5,
+              stroke = 0.2) +
+  geom_point2(aes(subset = !isTip & bootstrap >= 80 & bootstrap < 100),
+              shape = 21,
+              fill = "grey",
+              size = 1.5,
+              stroke = 0.2) 
+
+  ## Theme
+  theme_tree()
+  
+full.mic.tree
+```
+
+
+```{r}
+mic.tree_bslabs <- tree2 %<+% edit_lb +
+  geom_tiplab(size = 2, aes(label = new_lb)) +
+  geom_tree(size = .25) +
+  geom_treescale() +
+  geom_hilight(data = order, 
+               mapping = aes(node = node, fill = type),  # Map fill to type
+               show.legend = FALSE,
+               extendto = 3) +
+  geom_cladelab(data = data.frame(
+    node = c(1085, 1059, 1037, 608, 712, 672, 635, 614, 774, 766, 790, 952, 961, 803, 805, 901, 715),
+    name = c("Mrazekiidae", "Enterocytozoonidae", "Encephalitozoonidae", "Nosematidae", "Glugeidae", "Spragueidae", "Unikaryonidae", "Astathelohaniidae", "Neoperezidae", "Tubulinosematidae", "Caudosporidae", "Amblyosporidae", "Gurleyidae", "Amphiacanthidae", "Metchnikovellidae", "outgroup", "Tuzetidae")),
+    mapping = aes(node = node,
+                  label = name),
+    align = TRUE,
+    offset = .5,
+    barsize = .2,
+    fontsize = 2,
+    horizontal = TRUE) + 
+  new_scale_fill() +
+#  scale_fill_manual(values = order_colors,  # Use the named vector of colors
+#                    guide = guide_legend(keywidth = 0.5, keyheight = 0.5, title = "Orders"),
+#                    breaks = order$type) + # Use the type values for breaks 
+  geom_text2(aes(subset = !isTip, label = bootstrap),
+             size = 2, 
+             hjust = 0.5, 
+             vjust = -0.5, 
+             color = "black")
+  theme_tree()
+  
+mic.tree_bslabs
+```
+
+```{r}
+ggsave(
+  file = "full_mictree.svg",
+  plot = full.mic.tree,
+  width = 15,
+  height = 35)
+```
+edit .svg file. Subset the tree manually (figure 1)
+
+```{r}
+
+c.tree_simp <- ggtree(raxml, layout = "circular")
+c.tree_simp
+
+order.tree <- c.tree_simp +
+  geom_hilight(data = order, 
+               mapping = aes(node = node, fill = type),  # Map fill to type
+               show.legend = FALSE,
+               extendto = 4) +
+  scale_fill_manual(values = order_colors,  # Use the named vector of colors
+                    guide = guide_legend(keywidth = 0.5, keyheight = 0.5, title = "Orders"),
+                    breaks = order$type)  # Use the type values for breaks
+
+order.tree
+```
+
+Order and family tree with bootstraps
+```{r}
+clade.tree <- order.tree +
+  geom_cladelab(data = data.frame(
+        node = c(866, 904, 934, 789, 689, 709, 675, 668, 714, 735, 655, 781, 553, 573, 580, 606, 588, 956, 958, 1041),
+    name = c("Mrazekiidae", "Enterocytozoonidae", "Encephalitozoonidae", "Nosematidae", "Glugeidae", "Pleistophoridae 1", "Pleistophoridae 2", "Pleistophoridae 3", "Spragueidae", "Unikaryonidae", "Perezidae", "Astathelohaniidae", "Neoperezidae", "Tubulinosematidae", "Caudosporidae", "Amblyosporidae", "Gurleyidae", "Amphiacanthidae", "Metchnikovellidae", "outgroup")),
+    mapping = aes(node = node,
+                  label = name),
+    align = TRUE,
+    offset = 0,
+    barsize = .2,
+    fontsize = 2,
+    horizontal = FALSE) +
+  geom_point2(aes(subset = !isTip & bootstrap == 100),
+              shape = 21,
+              fill = "black",
+              size = 1.5,
+              stroke = 0.2) +
+  geom_point2(aes(subset = !isTip & bootstrap >= 80 & bootstrap < 100),
+              shape = 21,
+              fill = "grey",
+              size = 1.5,
+              stroke = 0.2) +
+  theme_tree()
+
+
+clade.tree
+
+```
+```{r}
+ggsave("clade_tree.svg", 
+       clade.tree,
+       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Conferences/ISOP2026/slides")
+```
+save this tree to copy and paste the missing order
+
+```{r}
+ggsave("order_meta_tree.svg", 
+       order.tree,
+       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Conferences/ISOP2026/slides")
+```
+
+# Add metadata
+```{r}
+metaData <- read.csv("finished_propagated_taxonomy_metadata_moved.csv")
+
+metaData[metaData == ""] <- NA
+
+#Subset metadata to match the tip labels in the tree
+metaData_sub <- metaData[metaData$pr2_accession %in% raxml@phylo[["tip.label"]], ]
+
+metaData_sub <- metaData_sub[match(raxml@phylo[["tip.label"]], metaData_sub$pr2_accession), ]
+
+# Addition of metadata by species from Bojko et al. 2022 where previously absent 
+b22 <- read.table("C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/microsporidia/additional_taxa/1000bp_tree/plus_ch_taxa/bojko2022_metadata_select.txt", header = TRUE, sep = "\t")
+
+#for row i in 1:i if environment_type is NA, replace the environment type with that of the corresponding species from b22
+for(i in 1:nrow(metaData_sub)) {
+  if(is.na(metaData_sub$environment_type[i])) {
+    species_match <- metaData_sub$species[i]
+    b22_row <- b22[b22$Species == species_match, ]
+    if (nrow(b22_row) > 0 ) {
+      metaData_sub$environment_type[i] <- b22_row$Environment[1]
+    }
+  }
+}
+
+# do the same for host
+for(i in 1:nrow(metaData_sub)) {
+  if(is.na(metaData_sub$host_category[i])) {
+    species_match <- metaData_sub$species[i]
+    b22_row <- b22[b22$Species == species_match, ]
+    if (nrow(b22_row) > 0 ) {
+      metaData_sub$host_category[i] <- b22_row$Host_group[1]
+    }
+  }
+}
+
+rownames(metaData_sub) <- raxml@phylo[["tip.label"]]
+
+metaData_select <- metaData_sub %>%
+  dplyr::select(pr2_sample_type, environment_type, host_category, annotation_note)
+
+metaData_select <- metaData_select %>% 
+  mutate(environment_type = tolower(environment_type))
+
+#B22 misspelled "ciliate", so I will replace all "Cilliates" with "Ciliates"
+metaData_select$host_category <- gsub("Cilliates", "Ciliates", metaData_select$host_category)
+
+```
+
+
+```{r}
+# Assign Heatmap colors using color blind friendly pallets https://zenodo.org/records/3381072 and wacolors
+
+# Meta Data Tree
+meta.tree1 <- order.tree + new_scale_fill()
+
+meta.tree1b <- gheatmap(p = meta.tree1,
+           data = metaData_select[,"pr2_sample_type", drop = F],  # Add the heatmap
+           color = NULL, 
+           colnames_position = "top", 
+           colnames_angle = 90, 
+           colnames_offset_y = 0.1, 
+           hjust = 0, 
+           font.size = 2,
+           offset = 0,
+           width = 0.1) +
+  scale_fill_manual(values = c("isolate" = "#E2CD70", #uw$flag
+                               "culture" = "#5DB3DB",
+                               "environmental" = "#247F5B"), 
+                    guide = guide_legend(keywidth = 0.5, keyheight = 0.5, title = 'Sequence Source'),
+                    breaks = c("isolate", "culture", "environmental"),
+                    na.value = "white")  # Use the names of heatmap.colours for breaks
+
+
+meta.tree2 <- meta.tree1b + new_scale_fill()
+
+meta.tree2b <- gheatmap(meta.tree2, 
+                            data = metaData_select[,"environment_type", drop = F],
+                            color = NULL, 
+                            colnames_position = "top", 
+                            colnames_angle = 90, 
+                            colnames_offset_y = 1,
+                            hjust = 0, 
+                            font.size = 2,
+                            offset = 0.4,
+                            width = 0.1) +
+  scale_fill_manual(values = c("brackish" = "#8A6172",
+                     "freshwater" = "#69A2E4",
+                     "marine" = "#2D3F4A",
+                     "terrestrial" = "#94AA3D",
+                     "wastewater" = "#8F6D3F"),
+                guide = guide_legend(keywidth = 0.5, keyheight = 0.5, title = "Habitat"),
+                breaks = c("brackish", "freshwater", "marine", "terrestrial", "wastewater"),
+                na.value = "white")
+
+meta.tree3 <- meta.tree2b + new_scale_fill()
+
+meta.tree3b <- gheatmap(meta.tree3, 
+                            data = metaData_select[,"host_category", drop = F],
+                            color = NULL, 
+                            colnames_position = "top", 
+                            colnames_angle = 90, 
+                            colnames_offset_y = 1,
+                            hjust = 0, 
+                            font.size = 2,
+                            offset = 0.8,
+                            width = 0.1) +
+  scale_fill_manual(values = c("Annelid" = "#FFAABB",
+                               "Arachnids" = "#000000",
+                               "Bryozoa" = "#88CCEE",
+                               "Cnidaria" = "#CC6677",
+                               "Crustacean" = "#882255",
+                               "Insects" = "#332288",
+                               "Nematodes" = "#EFC519",
+                               "Fish" = "#0072B2",
+                               "Mammals" = "#D55E00",
+                               "Reptiles" = "#117733",
+                               "Apicomplexa" = "#F0E442",
+                               "Amoebozoa" = "#999933",
+                               "Ciliates" = "#DDDDDD",
+                               "Planarian" = "#997700"),
+                guide = guide_legend(keywidth = 0.5, keyheight = 0.5, title = "Host"),
+                breaks = c("Arachnids", "Crustacean", "Nematodes", "Apicomplexa", "Ciliates", "Insects", "Amoebozoa", "Mammals", "Reptiles", "Bryozoa", "Fish", "Cnidaria", "Annelid", "Planarian"),
+                na.value = "white")
+
+
+meta.tree4 <- meta.tree3b + new_scale_fill()
+
+meta.tree4b<- gheatmap(meta.tree4, 
+                            data = metaData_select[,"annotation_note", drop = F],
+                            color = NULL, 
+                            colnames_position = "top", 
+                            colnames_angle = 90, 
+                            colnames_offset_y = 1,
+                            hjust = 0, 
+                            font.size = 2,
+                            offset = 1.2,
+                            width = 0.1) +
+  scale_fill_manual(values = c("corrected" = "#CC7810",
+                     "improved" = "#EFC519",
+                     "introduced" = "#831285"), #wacolor$skagit
+                guide = guide_legend(keywidth = 0.5, keyheight = 0.5, title = "Annotation note"),
+                breaks = c("corrected", "improved", "introduced"),
+                na.value = "white")
+
+meta.tree4b
+```
+#save the metadata from this tree to easily add to existing .svg
+```{r}
+ggsave("no_family_meta_tree.svg", 
+       meta.tree4b,
+       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/microsporidia/additional_taxa/1000bp_tree/plus_ch_taxa/plus corsaro sb")
+```
+
+
+
+# Add family level labels, branch support, and scale bar to tree
+
+
+```{r}
+family.tree <- meta.tree4b +
+  geom_cladelab(data = data.frame(
+        node = c(796, 769, 835, 852, 641, 632, 661, 672, 680, 702, 621, 907, 931, 951, 914, 574, 557, 543, 541, 1049),
+    name = c("Mrazekiidae", "Enterocytozoonidae", "Encephalitozoonidae", "Nosematidae", "Glugeidae", "Pleistophoridae 1", "Pleistophoridae 2", "Pleistophoridae 3", "Spragueidae", "Unikaryonidae", "Perezidae", "Astathelohaniidae", "Neoperezidae", "Tubulinosematidae", "Caudosporidae", "Amblyosporidae", "Gurleyidae", "Amphiacanthidae", "Metchnikovellidae", "outgroup")),
+    mapping = aes(node = node,
+                  label = name),
+    align = TRUE,
+    offset = 1.8,
+    barsize = .2,
+    fontsize = 2,
+    horizontal = FALSE) +
+  theme_tree()
+
+
+family.tree
+```
+
+```{r}
+# save file
+ggsave("meta_tree.svg", 
+       family.tree)
+
+ggsave("tree.png", 
+       family.tree,
+       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/additional_taxa/1000bp_tree")
+```
+
+# Generate a simpler Tree for talks
+```{r}
+order.tree.simp <- meta.tree4 +
+  geom_cladelab(data = order,
+    mapping = aes(node = node,
+                  label = type),
+    align = TRUE,
+    offset = 1,
+    barsize = .2,
+    fontsize = 2,
+    horizontal = FALSE) +
+  new_scale_fill() +
+  geom_point2(aes(subset = !isTip,
+                  fill = cut(bootstrap, c(0, 70, 90, 100))),
+              shape = 21,
+              size = .5,
+              stroke = 0.01) +
+  theme_tree() +
+  scale_fill_manual(values=c("white", "darkgrey", "black"),
+                    guide=guide_legend(keywidth = 0.5, keyheight = 0.5, title = "Bootstrap Support"),  
+                    breaks=c('(0,70]', '(70,90]', '(90,100]'), 
+                    labels=expression(BP < 70, 70 <= BP * " < 90", BP>=90)) +
+  geom_treescale(fontsize = 2, offset = 1)
+
+order.tree.simp
+```
+
+```{r}
+# save file
+ggsave("simp_tree.svg", 
+       order.tree.simp,
+       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Conferences/BGSA 2025")
+
+ggsave("simp_tree.png", 
+       order.tree.simp,
+       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Conferences/BGSA 2025")
+```
+
+
+
+
+
+
