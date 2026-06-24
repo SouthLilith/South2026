@@ -6,10 +6,10 @@ output: html_document
 ---
 
 # This R Markdown includes code chunks for visualizing Microsporidia PR2 trees
-From Corey Holt https://github.com/coreyholt/ggbeginners/blob/main/ggbeginners_phylogeneticTrees.R
+See link from Corey Holt for some guidance https://github.com/coreyholt/ggbeginners/blob/main/ggbeginners_phylogeneticTrees.R
 ```{r, setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/microsporidia/additional_taxa/2026') 
+knitr::opts_knit$set(root.dir = 'root_directory') 
 ```
 
 1. load required libraries     
@@ -71,13 +71,13 @@ I already ran and edited this in the file listed below, so I will open and provi
 og_lb_with_tax <- og_lb_with_tax %>%
   rename(pr2_accession = og_tip_lab)
 
-ogMetaTable <- read_excel("C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/finished_propagated_taxonomy_metadata_unchanged.xlsx")
+ogMetaTable <- read_excel("finished_propagated_taxonomy_metadata_unchanged.xlsx")
 
 merged_lb <- merge(og_lb_with_tax, ogMetaTable[, c("pr2_accession", "gb_definition")], 
                    by = "pr2_accession", 
                    all.x = TRUE)
 
-write.csv(merged_lb, "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/microsporidia/additional_taxa/1000bp_tree/plus_ch_taxa/plus corsaro sb/merged_lb.csv", row.names = FALSE)
+write.csv(merged_lb, "merged_lb.csv", row.names = FALSE)
 
 ```
 
@@ -306,14 +306,14 @@ clade.tree
 ```{r}
 ggsave("clade_tree.svg", 
        clade.tree,
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Conferences/ISOP2026/slides")
+       path = "slides")
 ```
 save this tree to copy and paste the missing order
 
 ```{r}
 ggsave("order_meta_tree.svg", 
        order.tree,
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Conferences/ISOP2026/slides")
+       path = "slides")
 ```
 
 # Add metadata
@@ -467,7 +467,7 @@ meta.tree4b
 ```{r}
 ggsave("no_family_meta_tree.svg", 
        meta.tree4b,
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/microsporidia/additional_taxa/1000bp_tree/plus_ch_taxa/plus corsaro sb")
+       path = "path")
 ```
 
 
@@ -500,7 +500,7 @@ ggsave("meta_tree.svg",
 
 ggsave("tree.png", 
        family.tree,
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/additional_taxa/1000bp_tree")
+       path = "path")
 ```
 
 # Generate a simpler Tree for talks
@@ -534,11 +534,11 @@ order.tree.simp
 # save file
 ggsave("simp_tree.svg", 
        order.tree.simp,
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Conferences/BGSA 2025")
+       path = "path")
 
 ggsave("simp_tree.png", 
        order.tree.simp,
-       path = "C:/Users/XPS 13 9360/OneDrive - UBC/Conferences/BGSA 2025")
+       path = "path")
 ```
 
 
