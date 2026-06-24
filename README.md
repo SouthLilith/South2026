@@ -1,7 +1,7 @@
 # South2026
 Code accompanying the South et al. 2026 manuscript
 
-**R Markdown documents containing scripts** 
+## R Markdown documents containing scripts
 
   mic_tree_script.Rmd 
     detailed SSU tree (figure 1) and metadata tree (figure 3) for Microsporidia
