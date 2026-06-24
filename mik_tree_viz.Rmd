@@ -1,0 +1,258 @@
+---
+title: "PR2_mikrocytid"
+author: "Lilith South"
+date: "2025-03-10"
+output: html_document
+---
+
+Make a phylogenetic tree with metadata for the mikrocytids
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/mikrocytids/plus_hartikanen') 
+```
+
+load required libraries     
+```{r}
+library(tidyverse)
+library(ape) # for tree manipulation
+library(dplyr) # for data manipulation
+library(ggtree)
+library(tidytree)
+library(ggnewscale) #allow for multiple scale_fills
+library(gginnards)
+library(treeio)
+library(writexl)
+library(readr)
+library(ggplot2)
+library(svglite)
+library(ggrepel)
+library(rainbow)
+library(phyloseq)
+library(phylotools)
+library(stringr)
+library(ggtext) 
+library(TDbook)
+library(stringr)
+library(rgbif) #to give taxonomic annotations to hosts
+library(ggplot2)
+```
+
+Read in tree file
+```{r}
+#load tree
+raxml <- read.raxml("C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/mikrocytids/2026_less_out/RAxML_bipartitionsBranchLabels.tre")
+
+raxml
+```
+
+Rename tips with taxonomic information 
+```{r}
+# make a table of the tip labels 
+og_lb <- raxml@phylo[["tip.label"]]
+
+tips <- data.frame(tip.label = og_lb)
+
+View(tips)
+```
+
+```{r}
+#rename them in excel and import the new labels 
+renamed <- read.table("new_lb.txt", header = TRUE, sep = "\t")
+
+View(renamed)
+```
+
+Analyze metadata and add to tree
+  sequence type
+  environment
+  host: need to classify
+  annotation note
+```{r}
+md <- read.csv2("metadata.csv", header = TRUE, sep = ",")
+
+for(i in 1:nrow(md)) {
+  if(!(is.na(md$gb_host[i]))){
+    # Get taxonomic information
+    host_taxonomy <- tryCatch(
+      {name_backbone(name = md$gb_host[i])
+        },
+      error = function(e) {
+        NULL # Return NULL if there's an error
+      }
+    )
+    
+    # Check if the result is not empty and has a 'phylum' field
+    if(!is.null(host_taxonomy) && !is.null(host_taxonomy$phylum)) {
+      md$host_taxonomy[i] <- host_taxonomy$phylum
+    }
+  }
+}
+
+#create new column for host order
+md <- md %>%
+  mutate(host_order = NA)
+
+for(i in 1:nrow(md)) {
+  if(!(is.na(md$gb_host[i]))){
+    # Get taxonomic information
+    host_order <- tryCatch(
+      {name_backbone(name = md$gb_host[i])
+        },
+      error = function(e) {
+        NULL # Return NULL if there's an error
+      }
+    )
+    if(!is.null(host_order) && !is.null(host_order$order)) {
+      md$host_order[i] <- host_order$order
+    }
+  }
+}
+
+md <- md %>% rename(host_phylum = host_taxonomy)
+
+host_phylum_entries <- unique(md$host_phylum)
+
+#manually edit the host taxonomy for the entries that missed the taxonomic assignment
+write.table(md,  file = "metadata_host_tax.csv", col.names = TRUE, row.names = FALSE, sep = ",")
+```
+
+Add metadata to tree
+```{r}
+# Import edited metadata table
+md_host <- read.table("metadata_host_tax.csv", header = TRUE, sep = ",")
+
+#subset the columns to just include the metadata of choice
+md_rep <- md_host %>%
+  select(Tip_label, pr2_sample_type, environment, host_category, Annotation.note)
+
+# Add NAs where blank
+md_rep[md_rep == ""] <- NA
+
+#Subset metadata to match the tip labels in the tree
+md_sub <- md_rep[md_rep$Tip_label %in% raxml@phylo[["tip.label"]], ]
+
+md_sub <- md_sub[match(raxml@phylo[["tip.label"]], md_sub$Tip_label), ]
+
+rownames(md_sub) <- raxml@phylo[["tip.label"]]
+
+md_sub <- md_sub %>%
+  select(pr2_sample_type, environment, host_category, Annotation.note)
+
+View(md_sub)
+```
+
+```{r}
+tree1 <- ggtree(raxml) 
+
+tree1
+```
+
+Rename tips
+```{r}
+# Add taxonomic names and identify nodes
+tree2 <- tree1 %<+% renamed
+
+tree2b <- tree2 +
+  geom_tiplab(aes(label = new.label), size = 2) +
+  geom_point2(aes(subset = !isTip & bootstrap == 100),
+              shape = 21, fill = "black", size = 1.5, stroke = 0.2) +
+  geom_point2(aes(subset = !isTip & bootstrap >= 80 & bootstrap < 100),
+              shape = 21, fill = "grey", size = 1.5, stroke = 0.2) +
+  geom_treescale()
+
+tree2b
+```
+
+```{r}
+# save file
+ggsave("mikTree_newlabs.svg", 
+       tree2,
+       path = "C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/mikrocytids/2026_less_out/")
+``` 
+
+```{r}
+meta.tree1 <- gheatmap(p = tree2b,
+           data = md_sub[,"pr2_sample_type", drop = F],  # Add the heatmap
+           color = NULL, 
+           colnames_position = "top", 
+           colnames_angle = 90, 
+           hjust = 0, 
+           font.size = 2,
+           offset = .44,
+           width = 0.05) + 
+  scale_fill_manual(values = c("isolate" = "#E2CD70",
+                               "environmental" = "#247F5B"), 
+                    guide = guide_legend(keywidth = 0.5, keyheight = 0.5, title = 'Sequence Source'),
+                    breaks = c("isolate", "environmental"),
+                    na.value = "white") 
+
+meta.tree2 <- meta.tree1 + new_scale_fill()
+
+meta.tree2b <- gheatmap(meta.tree2, 
+                            data = md_sub[,"environment", drop = F],
+                            color = NULL, 
+                            colnames_position = "top", 
+                            colnames_angle = 90,
+                            hjust = 0, 
+                            font.size = 2,
+                            offset = 0.49,
+                            width = 0.05) +
+  scale_fill_manual(values = c("brackish" = "#8A6172",
+                     "freshwater" = "#69A2E4",
+                     "marine" = "#2D3F4A"),
+                guide = guide_legend(keywidth = 0.5, keyheight = 0.5, title = "Habitat"),
+                breaks = c("brackish", "freshwater", "marine"),
+                na.value = "white")
+
+meta.tree3 <- meta.tree2b + new_scale_fill()
+
+meta.tree3b <- gheatmap(meta.tree3, 
+                            data = md_sub[,"host_category", drop = F],
+                            color = NULL, 
+                            colnames_position = "top", 
+                            colnames_angle = 90,
+                            hjust = 0, 
+                            font.size = 2,
+                            offset = 0.54,
+                            width = 0.05) +
+  scale_fill_manual(values = c("crab" = "#E69F00",
+                               "shrimp" = "#0072B2",
+                               "bivalve" = "#009E73",
+                               "copepod" = "#CC79A7"),
+                guide = guide_legend(keywidth = 0.5, keyheight = 0.5, title = "Host"),
+                breaks = c("crab", "shrimp", "bivalve", "copepod"),
+                na.value = "white")
+
+meta.tree4 <- meta.tree3b + new_scale_fill()
+
+meta.tree4b<- gheatmap(meta.tree4, 
+                            data = md_sub[,"Annotation.note", drop = F],
+                            color = NULL, 
+                            colnames_position = "top", 
+                            colnames_angle = 90,
+                            hjust = 0, 
+                            font.size = 2,
+                            offset = 0.59,
+                            width = 0.05) +
+  scale_fill_manual(values = c("improved" = "#EFC519",
+                     "introduced" = "#831285",
+                     "corrected" = "#CC7810"),
+                guide = guide_legend(keywidth = 0.5, keyheight = 0.5, title = "Annotation note"),
+                breaks = c("improved", "introduced", "corrected"),
+                na.value = "white")
+
+meta.tree4b
+
+```
+Export and make final edits to the .svg file
+```{r}
+# save file
+ggsave("mikTree.svg", 
+       meta.tree4b,
+       path = "C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/mikrocytids/2026_less_out/")
+
+ggsave("mikTree.png", 
+       meta.tree4b,
+       path = "C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/mikrocytids/2026_less_out/")
+```
+
