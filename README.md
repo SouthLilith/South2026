@@ -1,7 +1,7 @@
 # South2026
 Code accompanying the South et al. 2026 manuscript
 
-**R Markdown documents containing scripts** _(tree visualization & metadata analysis)_
+**R Markdown documents containing scripts** 
 
 assignTaxonomy_script.Rmd classification and analysis of experimental dataset using 3 separate reference databases (figure 3)
 
