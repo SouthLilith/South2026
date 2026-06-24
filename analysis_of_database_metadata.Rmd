@@ -1,0 +1,829 @@
+---
+title: "Analysis of PR2 metadata"
+author: "Lilith South"
+date: "2024-10-06"
+output: html_document
+---
+
+Overall goal of metadata analysis
+Make a tree first 
+Highlight where the unclassified taxa are on the tree of microsporidia and what their sources are (environment, host, location)
+Identify where all microsporidia are by taxonomic information, environment, host
+
+# Annotation: Has the taxonomic information changed
+is.true species_old == species 
+# Source (Isolate/Environmental/Cultural)
+# Environment (Marine/Brackish/Freshwater/Terrestrial/Unknown)
+# Host
+
+pr2_sequence_origin <- c(genome, metagenome, transcriptome)
+pr2_location_geotype
+pr2_location_geoname
+pr2_location
+pr2_ocean
+pr2_sample_type <- c(isolate, environmental, culture, specimen, blanks) # should I fill out the blanks?
+  gb_isolation_source
+  gb_environmental_sample
+  gb_note
+
+gb_host #potentially fill out here if data is lacking? and find how to report host (mammalia, reptile, fish, insecta, crustacea, arachnid, bryozoa, oligochaeta, nematoda, platyhelminth, micro-eukaryotes, mix), from Bojko et al. 2022
+
+1. load required packages
+```{r}
+library(tidyverse)
+library(dplyr)
+library(stringr)
+library(rgbif) #to give taxonomic annotations to hosts
+library(ggplot2)
+library(geodata) #to gain habitat information from gps coordinates from host distribution data
+library(terra)
+library(geodata)
+library(predicts)
+library(worrms)
+```
+
+2. load in metadata
+```{r}
+ds <- read.csv2("C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/finished_propagated_taxonomy_metadata_unchanged.csv", header = TRUE, sep = ",")
+
+View(ds)
+```
+
+Create a subset of the dataset with only the columns that I need for metadata analysis
+```{r}
+sub.ds <- ds %>% 
+  select(
+    pr2_accession, genbank_accession, species_old, gb_isolation_source, gb_host, gb_environmental_sample, gb_note, pr2_sample_type, pr2_ocean, pr2_location, pr2_sequence_origin, pr2_location_geotype, order, family, species)
+
+View(sub.ds)
+
+str(sub.ds)
+```
+
+Some of the columns are repetitive
+  Write a loop where for pr2 sample types which are na, if the gb_host is not NA, write "isolate" in   pr2_sample_type
+
+```{r}
+sub.ds <- sub.ds %>%
+  mutate_all(~ ifelse(. == "", NA, .))
+
+## For the Source column
+# put "isolate" if there is an identified host 
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$pr2_sample_type[i])) { # check if pr2_sample_type is NA
+    if(!is.na(sub.ds$gb_host[i])) { # check if gb_host is not NA
+      sub.ds$pr2_sample_type[i] <- "isolate" # assign "isolate" to the specific row
+    }
+  }
+}
+
+# Add a column with environmental type and populate it with "freshwater", "Marine", "Terrestrial", and "unknown"
+sub.ds %>% mutate(environment_type = NA)
+
+# put "marine" if there is an identified ocean in pr2_ocean 
+sub.ds$environment_type[!is.na(sub.ds$pr2_ocean)] <- "marine" 
+
+# If "nematode" is found in gb_isolation_source, make gb_host "nematode"
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$gb_host[i])) { 
+    if(grepl("nematode", sub.ds$gb_isolation_source[i])) { 
+      sub.ds$gb_host[i] <- "nematode"
+    }
+  }
+}
+
+# The following to be turned to "freshwater" in environment_type
+## any mention of "River", "river", lake", "Lake" "freshwater", "Pond", "pond", "Stream", "swamp" in gb_isolation_source
+## "Ammersee", "Pilsensee", "Waldschwaig See", "Woerthsee", "Xiangxi Bay", "Zelivka" in gb_isolation_source
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(!is.na(sub.ds$gb_isolation_source[i]) &&
+       (grepl("river|lake|freshwater|pond|stream|swamp|see|River|drinking|cooling|groundwater|tap water|fresh water", 
+             sub.ds$gb_isolation_source[i], ignore.case = TRUE) | 
+       sub.ds$gb_isolation_source[i] == "Xiangxi Bay" |
+       sub.ds$gb_isolation_source[i] == "Zelivka")) { 
+      sub.ds$environment_type[i] <- "freshwater"
+    }
+  }
+}
+
+# Other considerations for freshwater
+## under pr2_location
+### "Loch", "Lagoon", "lake", "Lough Corrib", "river"
+### NOT "Mono Lake"
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(!is.na(sub.ds$pr2_location[i]) &&
+       (grepl("loch|lake|lagoon|lough|river", 
+             sub.ds$pr2_location[i], ignore.case = TRUE) & 
+       sub.ds$pr2_location[i] != "Mono Lake")) { 
+      sub.ds$environment_type[i] <- "freshwater"
+    }
+  }
+} # Mono Lake is assigned freshwater, I need to make it NA
+
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(!is.na(sub.ds$pr2_location_geotype[i]) &&
+       (grepl("freshwater|lake|river|pond", 
+             sub.ds$pr2_location_geotype[i], ignore.case = TRUE))) { 
+      sub.ds$environment_type[i] <- "freshwater"
+    }
+  }
+}
+
+for(i in 1:nrow(sub.ds)) {
+    if (!is.na(sub.ds$pr2_location[i]) &&
+        (sub.ds$pr2_location[i] == "Mono Lake, CA"|
+        sub.ds$pr2_location[i] == "Spiral Jetty, Great Salt Lake, UT")) { 
+      sub.ds$environment_type[i] <- "salt lake"
+    }
+  }
+
+# Assign "terrestrial" in environment_type to the following
+## "anaerobic full-scale farm reactor treating agricultural wastes", "diapausing larvae in corn stalks", "Moss" in gb_isolation_source
+## any mention of "snow", "soil", "bumble bee", "clay", "compost", "field", "silk", "forest", "sand" in gb_isolation_source
+# If "Homo sapiens" or "nematode" are the hosts
+
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(!is.na(sub.ds$gb_isolation_source[i]) &&
+       (grepl("sludge|snow|soil|bee|clay|compost|field|silk|forest|sand|Moss|tree",
+              sub.ds$gb_isolation_source[i],
+              ignore.case = TRUE) | 
+       sub.ds$gb_isolation_source[i] == "anaerobic full-scale farm reactor treating agricultural wastes"|
+       sub.ds$gb_isolation_source[i] == "diapausing larvae in corn stalks")) {
+      sub.ds$environment_type[i] <- "terrestrial"
+    }
+    
+    if (!is.na(sub.ds$gb_host[i]) &&
+               (sub.ds$gb_host[i] == "Homo sapiens" |
+                sub.ds$gb_host[i] == "nematode")) {
+        sub.ds$environment_type[i] <- "terrestrial"
+      }
+  } 
+} 
+
+# Other considerations for terrestrial
+## under gb_note
+### "ant", "moth", "bee", "rabbit"
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(!is.na(sub.ds$gb_note[i]) &&
+       (grepl("ant|moth|bee|rabbitr", 
+             sub.ds$gb_note[i], ignore.case = TRUE))) { 
+      sub.ds$environment_type[i] <- "terrestrial"
+    }
+  }
+}
+
+
+# wastewater 
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(grepl("wastewater|waste water|sewage|sludge|feces", sub.ds$gb_isolation_source[i]))
+      { 
+      sub.ds$environment_type[i] <- "wastewater"
+    }
+  }
+}
+
+# Other considerations for marine
+## under pr2_location
+### "Bay", "harbour", "coast", "Puget Sound", "Bay of Fundy, Nova Scotia"
+### NOT "South Carolina, Sumter County, Woods Bay State Park", "West Coast of Vancouver Island, British Columbia", "North Bay"
+
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if((grepl("bay|harbour|coast|Puget Sound", sub.ds$pr2_location[i], ignore.case = TRUE)) &&
+       !(sub.ds$pr2_location[i] %in% c(
+         "South Carolina, Sumter County, Woods Bay State Park",
+         "West Coast of Vancouver Island, British Columbia", 
+         "North Bay"
+         )))
+      { 
+      sub.ds$environment_type[i] <- "marine"
+    }
+  }
+}
+
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(grepl("beach|Beach|Harbor|shoreline", sub.ds$gb_isolation_source[i]))
+      { 
+      sub.ds$environment_type[i] <- "marine"
+    }
+  }
+}
+
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(grepl("beach", sub.ds$pr2_location_geotype[i]))
+      { 
+      sub.ds$environment_type[i] <- "marine"
+    }
+  }
+}
+
+#For "brackish" in environment_type
+## any mention of "brackish", "estuarine" in gb_isolation_source
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(grepl("brackish|estuarine", sub.ds$gb_isolation_source[i]))
+      { 
+      sub.ds$environment_type[i] <- "brackish"
+    }
+  }
+}
+
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(grepl("brackish", sub.ds$pr2_location_geotype[i]))
+      { 
+      sub.ds$environment_type[i] <- "brackish"
+    }
+  }
+}
+
+# Other considerations for brackish
+## under pr2_location
+### "estuary", "Eden Landing, San Francisco Bay, CA"
+for(i in 1:nrow(sub.ds)) {
+    if(grepl("estuary|Eden Landing, San Francisco Bay, CA", sub.ds$pr2_location[i], ignore.case = TRUE))
+      { 
+      sub.ds$environment_type[i] <- "brackish"
+    }
+}
+
+# Brackish
+for(i in 1:nrow(sub.ds)) {
+    if(grepl("estuary|Eden Landing, San Francisco Bay, CA", sub.ds$pr2_location[i], ignore.case = TRUE))
+      { 
+      sub.ds$environment_type[i] <- "brackish"
+    }
+}
+
+# "amoebae endoparasite in gb_isolation_source should be "amoebae" in gb_host
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$gb_host[i])) { 
+    if(grepl("amoebae", sub.ds$gb_isolation_source[i]))
+      { 
+      sub.ds$gb_host[i] <- "amoebae"
+    }
+  }
+}
+
+
+View(sub.ds)
+
+```
+
+# Annotation: Has the taxonomic information changed
+is.true species_old == species 
+```{r}
+sub.ds <- sub.ds %>%
+  mutate(annotation_note = if_else(!is.na(species_old) & species_old == species, "improved", "corrected"))
+
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$species_old[i])) 
+      sub.ds$annotation_note[i] <- "introduced"
+    }
+
+# Step 1: Count the occurrences of "the value 5"corrected" in annotation_note
+count <- sum(sub.ds[, "annotation_note"] == "corrected", na.rm = TRUE)
+
+# Step 2: Get the total number of rows in the column
+total_rows <- nrow(sub.ds)
+
+# Step 3: Calculate the percentage
+percentage <- (count / total_rows) * 100
+
+# Print the percentage
+print(percentage) #66.90402
+```
+
+Annotate the hosts taxonomically
+```{r}
+# Get taxonomic information for a species
+tax_info_test <- name_backbone("Acanthacyclops vernalis
+") #one of the hosts to see if it works
+
+# View the result
+print(tax_info_test) #example
+
+#create some new columns
+sub.ds <- sub.ds %>%
+  mutate(host_taxonomy = NA)
+
+for(i in 1:nrow(sub.ds)) {
+  if(!(is.na(sub.ds$gb_host[i]))){
+    # Get taxonomic information
+    host_taxonomy <- tryCatch(
+      {name_backbone(name = sub.ds$gb_host[i])
+        },
+      error = function(e) {
+        NULL # Return NULL if there's an error
+      }
+    )
+    
+    # Check if the result is not empty and has a 'phylum' field
+    if(!is.null(host_taxonomy) && !is.null(host_taxonomy$phylum)) {
+      sub.ds$host_taxonomy[i] <- host_taxonomy$phylum
+    }
+  }
+}
+
+#create some new column for host order
+sub.ds <- sub.ds %>%
+  mutate(host_order = NA)
+
+for(i in 1:nrow(sub.ds)) {
+  if(!(is.na(sub.ds$gb_host[i]))){
+    # Get taxonomic information
+    host_order <- tryCatch(
+      {name_backbone(name = sub.ds$gb_host[i])
+        },
+      error = function(e) {
+        NULL # Return NULL if there's an error
+      }
+    )
+    if(!is.null(host_order) && !is.null(host_order$order)) {
+      sub.ds$host_order[i] <- host_order$order
+    }
+  }
+}
+
+sub.ds <- sub.ds %>% rename(host_phylum = host_taxonomy)
+
+host_phylum_entries <- unique(sub.ds$host_phylum)
+print(host_phylum_entries)
+```
+
+```{r}
+#Use host species to generate habitat where not specified
+
+for (i in 1:nrow(sub.ds)) {
+  
+  # Only run query if environment_type is NA
+  if (is.na(sub.ds$environment_type[i]) && !is.na(sub.ds$gb_host[i])) {
+    
+    spname <- sub.ds$gb_host[i]
+    message("Querying WoRMS for: ", spname)
+    
+    res <- tryCatch({
+      wm_records_name(name = spname, marine_only = FALSE)
+    }, error = function(e) NULL)
+    
+    if (!is.null(res) && nrow(res) > 0) {
+      rec <- res[1, ]  # first match
+      
+      # Build a collapsed habitat string
+      habitats <- c()
+      if (!is.na(rec$isMarine) && rec$isMarine == 1) habitats <- c(habitats, "Marine")
+      if (!is.na(rec$isBrackish) && rec$isBrackish == 1) habitats <- c(habitats, "Brackish")
+      if (!is.na(rec$isFreshwater) && rec$isFreshwater == 1) habitats <- c(habitats, "Freshwater")
+      if (!is.na(rec$isTerrestrial) && rec$isTerrestrial == 1) habitats <- c(habitats, "Terrestrial")
+      
+      # Collapse into one string, e.g. "Marine, Brackish"
+      sub.ds$environment_type[i] <- ifelse(length(habitats) > 0, 
+                                           paste(habitats, collapse = ", "), 
+                                           NA)
+    }
+  }
+}
+```
+
+```{r}
+#Do the same but with gbif database
+
+for (i in 1:nrow(sub.ds)) {
+  
+  if (is.na(sub.ds$environment_type[i]) && !is.na(sub.ds$gb_host[i])) {
+    
+    spname <- sub.ds$gb_host[i]
+    message("Querying GBIF for: ", spname)
+    
+    # Always initialize backbone
+    backbone <- NULL
+    
+    # Try to get backbone record
+    backbone <- tryCatch(
+      name_backbone(name = spname),
+      error = function(e) NULL
+    )
+    
+    # Only proceed if speciesKey exists
+    if (!is.null(backbone) && "speciesKey" %in% names(backbone)) {
+      key <- backbone$speciesKey
+      
+      if (!is.na(key)) {
+        # Query occurrences
+        res <- tryCatch(
+          occ_search(taxonKey = key, limit = 20, fields = c("habitat")),
+          error = function(e) NULL
+        )
+        
+        if (!is.null(res) && nrow(res$data) > 0) {
+          habitats <- unique(na.omit(res$data$habitat))
+          
+          if (length(habitats) > 0) {
+            sub.ds$environment_type[i] <- paste(habitats, collapse = ", ")
+          } else {
+            sub.ds$environment_type[i] <- NA
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+
+```{r}
+# Terrestrial hosts not included 
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(grepl("Lepidoptera|Primates|Hemiptera|Hymenoptera|Orthoptera
+", sub.ds$host_order[i]))
+      { 
+      sub.ds$environment_type[i] <- "Terrestrial"
+    }
+  }
+}
+
+# Freshwater hosts not included 
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(grepl("Acanthacyclops vernalis|Cherax|Cottus bairdii|Crangonyx|Daphnia rosea|Diporeia|Lake|Leiarius|Orhtocyclops modustus|Plecoglossus altivelis
+", sub.ds$gb_host[i]))
+      { 
+      sub.ds$environment_type[i] <- "Freshwater"
+    }
+  }
+}
+
+# Terrestrial hosts not included 
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(grepl("Agapornis|Agrilus anxius|Agriphila|Alabama|Antheraea|Apple|Arion|weevil|Chorthippus|Covasacris|dachshund|Dendroctonus ponderosae|Dichroplus elongatus|Epilachna varivestis
+|falcon|fox|Hippodamia|Lamproderma|Liophloeus|Listronotus|maltese|poodle|Mustela nigripes|Oscheius|Oulema melanopus|Phormia regina|Phyllobrotica|Pogona vitticeps|Polypsocus corruptus|pomeranian|Romalea microptera|Solenopsis geminata|Tristira magellanica|Xanthocaecilius sommermanae|Xanthogaleruca luteola
+", sub.ds$gb_host[i]))
+      { 
+      sub.ds$environment_type[i] <- "Terrestrial"
+    }
+  }
+}
+
+# Marine hosts not included 
+for(i in 1:nrow(sub.ds)) {
+  if(is.na(sub.ds$environment_type[i])) { 
+    if(grepl("halibut
+|Cypselurus pinnatibarbatus|Pleuronectes vetulus|Lumbriculus|Metapenaeus joineri|Pagrus major|Plumatella sp.|Pygospio elegans|Seriola quinqueradiata|Talitrus sp.
+
+
+", sub.ds$gb_host[i]))
+      { 
+      sub.ds$environment_type[i] <- "Marine"
+    }
+  }
+}
+```
+
+```{r}
+#manually edit the host taxonomy for the entries that missed the taxonomic assignment
+
+write.table(sub.ds,  file = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/finished_propagated_taxonomy_metadata_moved.csv", col.names = TRUE, row.names = FALSE, sep = ",")
+
+```
+
+```{r}
+#reload the manually edited .csv file
+edit.ds <- read.csv2("C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/finished_propagated_taxonomy_metadata_moved.csv", header = TRUE, sep = ",")
+
+#create some new column for host class
+edit.ds <- edit.ds %>%
+  mutate(host_class = NA)
+
+for(i in 1:nrow(edit.ds)) {
+  if(!(is.na(edit.ds$gb_host[i]))){
+    # Get taxonomic information
+    host_class <- tryCatch(
+      {name_backbone(name = edit.ds$gb_host[i])
+        },
+      error = function(e) {
+        NULL # Return NULL if there's an error
+      }
+    )
+    
+    # Check if the result is not empty and has a 'class' field
+    if(!is.null(host_class) && !is.null(host_class$class)) {
+      edit.ds$host_class[i] <- host_class$class
+    }
+  }
+}
+
+write.table(edit.ds,  file = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/finished_propagated_taxonomy_metadata_moved.csv", col.names = TRUE, row.names = FALSE, sep = ",")
+```
+
+
+Generate meaningful categories for hosts
+```{r}
+# did some manual edits to the spreadsheet, reload it
+
+edit.ds <- read.csv2("C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/finished_propagated_taxonomy_metadata_moved.csv", header = TRUE, sep = ",")
+
+edit.ds <- edit.ds %>% mutate(host_category = NA)
+
+# Amoebozoa <- "Amoebozoa" for host_phylum 
+for(i in 1:nrow(edit.ds)) {
+  if(is.na(edit.ds$host_category[i])) { # check if host_category is NA
+    if(!is.na(edit.ds$host_phylum[i]) &&
+       edit.ds$host_phylum[i] == "Amoebozoa") { 
+      edit.ds$host_category[i] <- "Amoebozoa" # assign "Amoebozoa" to the specific row
+    }
+    {
+  if(is.na(edit.ds$host_category[i])) { # check if host_category is NA
+    if(!is.na(edit.ds$gb_host[i]) &&
+       edit.ds$gb_host[i] == "amoebae") { 
+      edit.ds$host_category[i] <- "Amoebozoa" # assign "Amoebozoa" to the specific row
+    }
+  }
+    }
+  }
+}
+
+# Crustacean <- "Branchiopoda", "Copepoda", "Malacostraca" under host_class
+## "Decapoda" under host_order
+## "crustacean" under google..subphylum.
+for(i in 1:nrow(edit.ds)) {
+  if(is.na(edit.ds$host_category[i])) { # check if host_category is NA
+    if(edit.ds$host_class[i] %in% c("Branchiopoda", "Copepoda", "Malacostraca")) { 
+      edit.ds$host_category[i] <- "Crustacean" 
+    }
+    
+    if(!is.na(edit.ds$host_order[i]) && edit.ds$host_order[i] == "Decapoda"){ 
+      edit.ds$host_category[i] <- "Crustacean" 
+    }
+  }
+    if(!is.na(edit.ds$gb_host[i]) && edit.ds$gb_host[i] == "amphipod"){ 
+      edit.ds$host_category[i] <- "Crustacean" 
+    }
+  }
+
+# Fish <- "Anguilliformes", "Atheriniformes", "Aulopiformes", "Beloniformes", "Characiformes", "Clupeiformes", "Cypriniformes", "Gadiformes", "Gasterosteiformes", "Lophiiformes", "Tetraodontiformes", "Scorpaeniformes", "Salmoniformes", "Pleuronectiformes", "Perciformes", "Osmeriformes" in host_order
+## "fish" under other.quick.taxonomy.notes
+for(i in 1:nrow(edit.ds)) {
+  if(is.na(edit.ds$host_category[i])) { # check if host_category is NA
+    if(edit.ds$host_order[i] %in% c("Anguilliformes", "Atheriniformes", "Aulopiformes", "Beloniformes", "Characiformes", "Clupeiformes", "Cypriniformes", "Gadiformes", "Gasterosteiformes", "Lophiiformes", "Tetraodontiformes", "Scorpaeniformes", "Salmoniformes", "Pleuronectiformes", "Perciformes", "Osmeriformes")) { 
+      edit.ds$host_category[i] <- "Fish" 
+    }
+  }
+}
+
+
+for(i in 1:nrow(edit.ds)) {
+  if(is.na(edit.ds$host_category[i])) { # check if host_category is NA
+    # Nematodes <- "Nematoda" under host_phylum
+    if(!is.na(edit.ds$host_phylum[i]) &&
+       edit.ds$host_phylum[i] == "Nematoda") { 
+      edit.ds$host_category[i] <- "Nematodes"
+    }
+    # Mammals <- "Mammalia" under host_class
+    if(!is.na(edit.ds$host_class[i]) &&
+       edit.ds$host_class[i] == "Mammalia") { 
+      edit.ds$host_category[i] <- "Mammals"
+    }
+    # Insects <- "Insecta" under host_class
+    if(!is.na(edit.ds$host_class[i]) &&
+       edit.ds$host_class[i] == "Insecta") { 
+      edit.ds$host_category[i] <- "Insects"
+    }
+    # Arachnids <- "Arachnida" under host_class
+    if(!is.na(edit.ds$host_class[i]) &&
+       edit.ds$host_class[i] == "Arachnida") { 
+      edit.ds$host_category[i] <- "Arachnids"
+    }
+   # Birds <- "Aves" under host_class 
+    if(!is.na(edit.ds$host_class[i]) &&
+       edit.ds$host_class[i] == "Aves") { 
+      edit.ds$host_category[i] <- "Birds"
+    }
+    # Annelids <- "annelida" under host_phylum
+    if(!is.na(edit.ds$host_phylum[i]) &&
+       edit.ds$host_phylum[i] == "annelida") { 
+      edit.ds$host_category[i] <- "Annelids"
+    }
+    # Apicomplexa <- "Eugregarinorida" under host_order
+    if(!is.na(edit.ds$host_order[i]) && 
+       edit.ds$host_order[i] == "Eugregarinorida") { 
+      edit.ds$host_category[i] <- "Apicomplexa"
+    }
+   # Mollusks <- "Mollusca" under host_phylum 
+    if(!is.na(edit.ds$host_phylum[i]) &&
+       edit.ds$host_phylum[i] == "Mollusca") { 
+      edit.ds$host_category[i] <- "Mollusks"
+    }
+    # Cilliates <- "Ciliophora" under host_phylum
+    if(!is.na(edit.ds$host_phylum[i]) &&
+       edit.ds$host_phylum[i] == "Ciliophora") { 
+      edit.ds$host_category[i] <- "Cilliates"
+    }
+    # Reptiles <- "Testudines", "Squamata" under host_class
+    if(!is.na(edit.ds$host_class[i]) &&
+       edit.ds$host_class[i] %in% c("Testudines", "Squamata")) { 
+      edit.ds$host_category[i] <- "Reptiles" 
+    }
+    # Bryozoa <- "Bryozoa" under host_phylum
+    if(!is.na(edit.ds$host_phylum[i]) &&
+       edit.ds$host_phylum[i] == "Bryozoa") { 
+      edit.ds$host_category[i] <- "Bryozoa"
+    }
+    # Cnidaria <- "Cnidaria" under host_phylum
+     if(!is.na(edit.ds$host_phylum[i]) &&
+        edit.ds$host_phylum[i] == "Cnidaria") { 
+      edit.ds$host_category[i] <- "Cnidaria"
+     }
+    if(!is.na(edit.ds$gb_host[i]) &&
+        edit.ds$gb_host[i] == "Actinosporean") { 
+      edit.ds$host_category[i] <- "Cnidaria"
+    }
+  }
+}
+
+write.table(edit.ds,  file = "C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/finished_propagated_taxonomy_metadata_moved.csv", col.names = TRUE, row.names = FALSE, sep = ",")
+
+#Make manual edits to host_category
+```
+
+Yay! now, I need to make the metadata figures and them tie them into the phylogenetic tree... But would perhaps be good to make them first so I can alternate writing and perfecting the figure 
+```{r}
+#Barplot for proportion of corrected/improved annotation by family 
+
+edit.ds <- read.csv2("C:/Users/XPS 13 9360/OneDrive - UBC/Sequences/pr2_workshop/finished_propagated_taxonomy_metadata_moved.csv", header = TRUE, sep = ",")
+
+annotation_plot <- 
+  ggplot(data = edit.ds,
+       mapping = aes(fill = annotation_note,
+                     x = family),
+        geom_text(
+    aes(label = after_stat(count)),
+    stat = "count",
+    vjust = -0.5,
+    size = 5
+  )) +
+  geom_bar(position = "fill",
+           stat = "count") +
+  labs(
+    title = "Count of Improved vs Corrected Annotations by Family",
+    x = "Family",
+    y = "Percentage"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+annotation_plot
+```
+
+Environment Type
+```{r}
+
+habitat_plot <-  ggplot(data = edit.ds,
+       mapping = aes(fill = environment_type,
+                     x = family),
+        geom_text(
+    aes(label = after_stat(count)),
+    stat = "count",
+    vjust = -0.5,
+    size = 5
+  )) +
+  geom_bar(position = "fill",
+           stat = "count") +
+  labs(
+    title = "Environment Type by Family",
+    x = "Family",
+    y = "Percentage"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+habitat_plot
+# Need to turn NA to "unknown"
+# Can use rredlist package to gain habitat information for different species
+
+```
+# There are many unknowns for environment type. Use host information to get environment type where currently unknown
+## https://jcoliver.github.io/learn-r/011-species-distribution-models.html
+```{r}
+## I am still figuring this out
+#Test
+occ_data <- occ_search(scientificName = "Metaseiulus occidentalis", limit = 1)
+print(occ_data$data)
+
+# longitude = 30.53479	
+# latitude = 46.40935
+
+# Generate new columns for host distribution
+edit.ds <- edit.ds %>%
+  mutate(host_sample_latitude = NA,
+         host_sample_longitude = NA)
+
+for(i in 1:nrow(edit.ds)) {
+  host_species <- edit.ds$gb_host[i]
+  
+  # Retrieve occurence data for the species
+  occ_results <- occ(search(scientificName = host_species, limit = 1)$data)
+  
+  # Extract latitude and longitude
+  if (!is.null(occ_results)) {
+    occ_results <- occ_results[, c("decimalLatitude", "decimalLongitude")]
+    occurrence_data[[i]] <- occ_results
+  }
+}
+
+# Download ESA WorldCover data
+landcover_data <- landcover(var ="water", path = tempdir())
+
+# Load MODIS land cover data (downloaded manually)
+modis_data <- raster("path_to_modis_landcover.tif")
+
+# Extract habitat types for GPS coordinates
+habitat_types <- extract(landcover_data, c(30.53479, 46.40935))
+
+print(habitat_types)
+
+# Combine GPS data and habitat types
+gps_habitat_data <- cbind(gps_data, habitat_types)
+print(gps_habitat_data)
+
+```
+
+
+Source (Isolate/Environmental/Cultural)
+```{r}
+#fix the "marine" and "specimen" bit in the data
+## manually chanigng AF151529.1.1346_U to "isolate", KC513629.8001.9297_U to "culture", and GU183263.1.1340_U to NA
+
+# turn all "marine" to environmental under pr2_sample_type
+edit.ds <- edit.ds %>%
+  mutate(pr2_sample_type = ifelse(pr2_sample_type == "marine", "environmental", pr2_sample_type))
+
+#Turn NAs to unknown
+edit.ds <- edit.ds %>%
+  mutate(pr2_sample_type = ifelse(is.na(pr2_sample_type), "unknown", pr2_sample_type))
+
+source_plot <-  ggplot(data = edit.ds,
+       mapping = aes(fill = pr2_sample_type,
+                     x = family),
+        geom_text(
+    aes(label = after_stat(count)),
+    stat = "count",
+    vjust = -0.5,
+    size = 5
+  )) +
+  geom_bar(position = "fill",
+           stat = "count") +
+  labs(
+    title = "Source by Family",
+    x = "Family",
+    y = "Percentage"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+source_plot
+
+```
+Host
+```{r}
+#Turn NAs to unknown
+edit.ds <- edit.ds %>%
+  mutate(host_category = ifelse(is.na(host_category), "unknown", host_category))
+
+host_plot <-  ggplot(data = edit.ds,
+       mapping = aes(fill = host_category,
+                     x = family),
+        geom_text(
+    aes(label = after_stat(count)),
+    stat = "count",
+    vjust = -0.5,
+    size = 5
+  )) +
+  geom_bar(position = "fill",
+           stat = "count") +
+  labs(
+    title = "Host by Family",
+    x = "Family",
+    y = "Percentage"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+host_plot
+# group host types?
+```
+# Perhaps include N for number of sequences in each family
+
+I want to view the meta data by family
+```{r}
+sub.ds %>% 
+  group_by(family)
+```
+
+
+
