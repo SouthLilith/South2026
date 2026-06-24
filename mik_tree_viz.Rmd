@@ -5,10 +5,10 @@ date: "2025-03-10"
 output: html_document
 ---
 
-Make a phylogenetic tree with metadata for the mikrocytids
+Make a phylogenetic tree with metadata for mikrocytids
 ```{r, setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/mikrocytids/plus_hartikanen') 
+knitr::opts_knit$set(root.dir = 'your_directory') 
 ```
 
 load required libraries     
@@ -40,7 +40,7 @@ library(ggplot2)
 Read in tree file
 ```{r}
 #load tree
-raxml <- read.raxml("C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/mikrocytids/2026_less_out/RAxML_bipartitionsBranchLabels.tre")
+raxml <- read.raxml("RAxML_bipartitionsBranchLabels.tre")
 
 raxml
 ```
@@ -167,7 +167,7 @@ tree2b
 # save file
 ggsave("mikTree_newlabs.svg", 
        tree2,
-       path = "C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/mikrocytids/2026_less_out/")
+       path = "your_path")
 ``` 
 
 ```{r}
@@ -249,10 +249,10 @@ Export and make final edits to the .svg file
 # save file
 ggsave("mikTree.svg", 
        meta.tree4b,
-       path = "C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/mikrocytids/2026_less_out/")
+       path = "your_path")
 
 ggsave("mikTree.png", 
        meta.tree4b,
-       path = "C:/Users/south/OneDrive - UBC/Sequences/pr2_workshop/mikrocytids/2026_less_out/")
+       path = "your_path")
 ```
 
